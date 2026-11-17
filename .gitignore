@@ -1,0 +1,14 @@
+# 虚拟环境（绝对不能被上传）
+venv/
+__pycache__/
+
+# 存放你 API Key 的隐私文件
+.env
+
+# 本地数据库（上传了会导致云端数据冲突）
+fans_trend.db
+fans_trend_backup.db
+
+# 其他不用上传的临时文件
+.DS_Store
+*.log
