@@ -1,4 +1,8 @@
 let modalMode = 'monitor'; 
+let currentSearchQueue = [];
+let currentGroupData = null; 
+let currentConfirmList = [];
+let finalWeiboSearchNames = []; // 专门用来收集微博追踪的最终名单
 
 function switchTab(tabId) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
@@ -8,19 +12,13 @@ function switchTab(tabId) {
 
     if (tabId === 'home') setTimeout(renderWordCloud, 100);
     if (tabId === 'trend') { 
-        // 1. 先加载监控列表和本地缓存趋势（瞬间完成，不用等网络）
         loadMonitorList(); 
         setTimeout(loadTrendChart, 100); 
-        
-        // 2. 加载情绪雷达（需要请求大模型，较慢）
         loadSentimentChart(); 
-        
-        // 3. 最后再在后台静默抓取最新粉丝数（因为有了并发，速度已经很快）
         loadCurrentFans(); 
     }
 }
 
-// 🌟 检查并显示预警横幅
 async function checkAlerts() {
     try {
         const res = await fetch('/api/alerts');
@@ -63,34 +61,55 @@ async function searchWeibo() {
     const inputVal = document.getElementById('weibo-names').value.trim();
     if(!inputVal) return;
     
-    // 拿到用户输入的第一个词（比如“蒋敦豪”），先拿去搜候选账号
     let names = inputVal.split(/[,，\s]+/).map(n => n.trim()).filter(n => n);
     if (names.length === 0) return;
-    let firstQuery = names[0];
 
-    // 标记当前为“抓取微博”模式
+    currentSearchQueue = [...names]; 
+    finalWeiboSearchNames = []; // 重置收集列表
     modalMode = 'weibo'; 
+    
+    processWeiboQueueItem();
+}
+
+async function processWeiboQueueItem() {
+    if (currentSearchQueue.length === 0) {
+        // 队列空了，执行最终抓取
+        if (finalWeiboSearchNames.length > 0) {
+            executeWeiboSearch(finalWeiboSearchNames.join(","));
+        }
+        return; 
+    }
+    
+    let nextName = currentSearchQueue.shift();
+    
     document.getElementById('user-select-modal').style.display = 'flex';
-    document.getElementById('modal-search-term').innerText = firstQuery;
-    document.getElementById('candidate-list').innerHTML = '<p style="text-align:center;">⏳ 正在获取候选账号，请稍候...</p>';
+    document.getElementById('modal-search-term').innerText = nextName;
+    document.getElementById('candidate-list').innerHTML = '<p style="text-align:center;">⏳ 正在获取候选账号...</p>';
+    
+    // 动态修改确认按钮文字
+    document.querySelector('#user-select-modal button[onclick="confirmAddMonitor()"]').innerText = "确认并抓取";
+
+    const masterCheckbox = document.getElementById('select-all-users');
+    if (masterCheckbox) masterCheckbox.checked = false;
     
     currentConfirmList = []; 
-
+    
     try {
-        const res = await fetch(`/api/search_users?query=${encodeURIComponent(firstQuery)}`);
+        const res = await fetch(`/api/search_users?query=${encodeURIComponent(nextName)}`);
         const data = await res.json();
         
         if (!data.users || data.users.length === 0) {
-            alert(`未找到“${firstQuery}”的账号，将直接按原名抓取。`);
-            closeModal(); // 关闭弹窗
-            executeWeiboSearch(inputVal); // 直接按原名抓取
+            console.warn(`未找到 "${nextName}" 的候选账号，将使用原名抓取`);
+            finalWeiboSearchNames.push(nextName);
+            document.getElementById('user-select-modal').style.display = 'none';
+            processWeiboQueueItem(); // 继续下一个
             return;
         }
 
         let html = '';
         data.users.forEach((u, index) => {
             let defaultAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.screen_name}`;
-            let isChecked = (index === 0) ? 'checked' : ''; // 默认勾选第一个
+            let isChecked = (index === 0) ? 'checked' : '';
             
             html += `
             <label style="display:flex; align-items:center; gap:10px; padding:10px; border:1px solid #e5e7eb; border-radius:8px; cursor:pointer;">
@@ -104,30 +123,28 @@ async function searchWeibo() {
         });
         
         document.getElementById('candidate-list').innerHTML = html;
-        currentConfirmList = [data.users[0].screen_name]; // 默认选中第一个
+        currentConfirmList = [data.users[0].screen_name]; 
         
     } catch (e) {
         console.error(e);
-        closeModal();
+        document.getElementById('user-select-modal').style.display = 'none';
+        processWeiboQueueItem();
     }
 }
 
-// 🌟 新增：真正去抓取微博的函数
 async function executeWeiboSearch(namesStr) {
     const resultsArea = document.getElementById('weibo-results');
     
-    // 保存搜索历史
     let history = JSON.parse(localStorage.getItem('searchHistory') || '[]');
     let newNames = namesStr.split(/[,，\s]+/).map(n => n.trim()).filter(n => n);
     history = [...new Set([...newNames, ...history])].slice(0, 30);
     localStorage.setItem('searchHistory', JSON.stringify(history));
 
-    resultsArea.innerHTML = '<p>⏳ 正在抓取微博动态，请稍候...</p>';
+    resultsArea.innerHTML = '<p>⏳ 正在批量抓取微博动态，请稍候...</p>';
     try {
         const res = await fetch(`/api/weibo?nicknames=${encodeURIComponent(namesStr)}&limit=5`);
         const data = await res.json();
         
-        // 如果你后端报错了（比如反爬），会走这里
         if (data.error) {
             resultsArea.innerHTML = `<p style="color:red;">❌ 抓取异常: ${data.error}</p>`;
             return;
@@ -176,11 +193,7 @@ async function removeMonitor(name) {
     await loadMonitorList(); loadCurrentFans(); loadTrendChart(); loadSentimentChart();
 }
 
-// ================= 添加监控核心逻辑 (Agent工作流) =================
-let currentSearchQueue = [];
-let currentGroupData = null; 
-let currentConfirmList = [];
-
+// ================= 添加监控核心逻辑 =================
 async function addMonitor() {
     const inputVal = document.getElementById('add-monitor-name').value.trim();
     if (!inputVal) return;
@@ -226,7 +239,6 @@ async function addMonitor() {
 }
 
 function confirmGroupSelection() {
-    // 🌟 核心修复：加上安全锁。如果数据还没加载好就点确认，直接拦截！
     if (!currentGroupData) {
         alert("⏳ 正在智能解析组合信息，请稍等1-2秒再点击！");
         return;
@@ -242,10 +254,7 @@ function confirmGroupSelection() {
         selectedNames = selectedNames.concat(currentGroupData.members);
     }
     
-    // 将用户勾选的名字，全部塞进待确认队列的最前面
     currentSearchQueue = [...selectedNames, ...currentSearchQueue];
-    
-    // 开始依次弹出“账号精准确认”的窗口
     processNextQueueItem();
 }
 
@@ -271,6 +280,9 @@ async function searchAndShowModal(name) {
     document.getElementById('modal-search-term').innerText = name;
     document.getElementById('candidate-list').innerHTML = '<p style="text-align:center;">⏳ 正在获取候选账号...</p>';
     
+    // 动态修改确认按钮文字
+    document.querySelector('#user-select-modal button[onclick="confirmAddMonitor()"]').innerText = "确认添加";
+
     const masterCheckbox = document.getElementById('select-all-users');
     if (masterCheckbox) masterCheckbox.checked = false;
     
@@ -282,7 +294,10 @@ async function searchAndShowModal(name) {
         
         if (!data.users || data.users.length === 0) {
             document.getElementById('candidate-list').innerHTML = `<p style="color:red; text-align:center;">未找到“${name}”的账号，自动跳过。</p>`;
-            setTimeout(() => { closeModal(); processNextQueueItem(); }, 1500);
+            setTimeout(() => { 
+                document.getElementById('user-select-modal').style.display = 'none';
+                processNextQueueItem(); 
+            }, 1500);
             return;
         }
 
@@ -340,32 +355,48 @@ function updateConfirmList(checkbox) {
     }
 }
 
-// 取消：直接放弃这一批次的添加
+// 🌟 修复后的取消逻辑
 function closeModal() {
     document.getElementById('user-select-modal').style.display = 'none';
-    currentSearchQueue = []; 
-    modalMode = 'monitor'; // 🌟 核心：用完弹窗，状态重置回默认
+    // 如果是微博追踪模式，取消则清空所有队列和收集器
+    if (modalMode === 'weibo') {
+        currentSearchQueue = [];
+        finalWeiboSearchNames = [];
+        modalMode = 'monitor';
+    } else {
+        // 如果是监控模式，清空队列，放弃后续添加
+        currentSearchQueue = [];
+    }
 }
 
-// 确认添加：提交当前选中的账号，继续处理下一个
+// 🌟 修复后的确认逻辑
 async function confirmAddMonitor() {
     if (currentConfirmList.length === 0) {
         alert("请至少勾选一个账号！");
         return;
     }
     
-    let selectedNamesStr = currentConfirmList.join(",");
+    // 必须先隐藏弹窗，但【绝对不能】调用 closeModal()，否则会清空队列
+    document.getElementById('user-select-modal').style.display = 'none';
 
     if (modalMode === 'weibo') {
-        // 🌟 如果是微博追踪模式：关闭弹窗，带着确认的账号去抓取！
-        closeModal();
-        executeWeiboSearch(selectedNamesStr);
+        // 把当前确认的名字加入总列表
+        finalWeiboSearchNames.push(...currentConfirmList);
+        
+        // 如果队列里还有名字，继续弹窗确认
+        if (currentSearchQueue.length > 0) {
+            processWeiboQueueItem();
+        } else {
+            // 所有名字都确认完了，真正开始抓取
+            executeWeiboSearch(finalWeiboSearchNames.join(","));
+            finalWeiboSearchNames = []; // 清空
+            modalMode = 'monitor'; // 重置状态
+        }
     } else {
-        // 如果是粉丝监控模式：按原来的逻辑，写入数据库
+        // 监控模式：写入数据库
         for (let name of currentConfirmList) {
             await fetch(`/api/monitor/add?name=${encodeURIComponent(name)}`);
         }
-        closeModal(); 
         processNextQueueItem(); 
     }
 }
