@@ -61,11 +61,21 @@ async function searchWeibo() {
     const inputVal = document.getElementById('weibo-names').value.trim();
     if(!inputVal) return;
     
-    let names = inputVal.split(/[,，\s]+/).map(n => n.trim()).filter(n => n);
+    // 智能分割：支持全角逗号、半角逗号、顿号、空格
+    let names = inputVal.split(/[,，\s、]+/).map(n => n.trim()).filter(n => n);
+    console.log("📌 系统识别到的名字列表：", names); // 可以在浏览器按F12看这里
+
     if (names.length === 0) return;
 
+    // 如果识别到了多个，弹窗让用户再次确认
+    if (names.length > 1) {
+        if (!confirm(`即将依次抓取以下 ${names.length} 个账号：\n${names.join('\n')}\n\n点击“确定”开始逐个确认。`)) {
+            return;
+        }
+    }
+
     currentSearchQueue = [...names]; 
-    finalWeiboSearchNames = []; // 重置收集列表
+    finalWeiboSearchNames = []; 
     modalMode = 'weibo'; 
     
     processWeiboQueueItem();
