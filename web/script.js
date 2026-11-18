@@ -64,6 +64,7 @@ async function searchWeibo() {
     let names = inputVal.split(/[,，\s]+/).map(n => n.trim()).filter(n => n);
     if (names.length === 0) return;
 
+<<<<<<< HEAD
     currentSearchQueue = [...names]; 
     finalWeiboSearchNames = []; // 重置收集列表
     modalMode = 'weibo'; 
@@ -78,6 +79,20 @@ async function processWeiboQueueItem() {
             executeWeiboSearch(finalWeiboSearchNames.join(","));
         }
         return; 
+=======
+    // 将所有的名字放入队列，并标记为“抓取微博”模式
+    currentSearchQueue = [...names]; 
+    modalMode = 'weibo'; 
+    
+    // 处理队列中的第一个名字
+    processWeiboQueueItem();
+}
+
+// 新增：专门处理“抓取微博”模式下的队列
+async function processWeiboQueueItem() {
+    if (currentSearchQueue.length === 0) {
+        return; // 队列为空，结束
+>>>>>>> b80747982893741af8a1ffcb7aa3d273f2954af2
     }
     
     let nextName = currentSearchQueue.shift();
@@ -85,12 +100,15 @@ async function processWeiboQueueItem() {
     document.getElementById('user-select-modal').style.display = 'flex';
     document.getElementById('modal-search-term').innerText = nextName;
     document.getElementById('candidate-list').innerHTML = '<p style="text-align:center;">⏳ 正在获取候选账号...</p>';
+<<<<<<< HEAD
     
     // 动态修改确认按钮文字
     document.querySelector('#user-select-modal button[onclick="confirmAddMonitor()"]').innerText = "确认并抓取";
 
     const masterCheckbox = document.getElementById('select-all-users');
     if (masterCheckbox) masterCheckbox.checked = false;
+=======
+>>>>>>> b80747982893741af8a1ffcb7aa3d273f2954af2
     
     currentConfirmList = []; 
     
@@ -99,10 +117,22 @@ async function processWeiboQueueItem() {
         const data = await res.json();
         
         if (!data.users || data.users.length === 0) {
+<<<<<<< HEAD
             console.warn(`未找到 "${nextName}" 的候选账号，将使用原名抓取`);
             finalWeiboSearchNames.push(nextName);
             document.getElementById('user-select-modal').style.display = 'none';
             processWeiboQueueItem(); // 继续下一个
+=======
+            // 没搜到，直接按原名加入最终抓取列表，跳过弹窗
+            console.warn(`未找到 "${nextName}" 的候选账号，将使用原名抓取`);
+            // 这里我们需要一个临时变量来收集所有最终要抓取的名字
+            if (!window.finalWeiboSearchNames) window.finalWeiboSearchNames = [];
+            window.finalWeiboSearchNames.push(nextName);
+            
+            // 继续处理下一个
+            document.getElementById('user-select-modal').style.display = 'none';
+            processWeiboQueueItem();
+>>>>>>> b80747982893741af8a1ffcb7aa3d273f2954af2
             return;
         }
 
@@ -202,37 +232,30 @@ async function addMonitor() {
     let firstQuery = namesToAdd[0]; 
     currentSearchQueue = namesToAdd.slice(1);
 
-    currentGroupData = null; 
-    document.getElementById('group-official-name').innerText = '...';
-    document.getElementById('group-member-count').innerText = '...';
-    document.getElementById('group-modal-query').innerText = firstQuery;
-    
-    const loadingEl = document.getElementById('group-loading');
-    if(loadingEl) loadingEl.style.display = 'inline'; 
-    
-    document.getElementById('group-select-modal').style.display = 'flex';
-    
+    // 1. 先静默请求后端，判断是不是组合，不显示弹窗
     try {
         const res = await fetch(`/api/check_group?query=${encodeURIComponent(firstQuery)}`);
         const data = await res.json();
         
-        if(loadingEl) loadingEl.style.display = 'none'; 
-
         if (data.is_group && data.members && data.members.length > 0) {
+            // 2. 只有确认是组合时，才显示组合弹窗
             currentGroupData = data;
             document.getElementById('group-official-name').innerText = data.group_name;
             document.getElementById('group-member-count').innerText = data.members.length;
             document.getElementById('group-opt-official').checked = true;
             document.getElementById('group-opt-members').checked = true;
+            
+            const loadingEl = document.getElementById('group-loading');
+            if(loadingEl) loadingEl.style.display = 'none'; // 隐藏加载提示
+            
+            document.getElementById('group-select-modal').style.display = 'flex';
         } else {
-            document.getElementById('group-select-modal').style.display = 'none';
+            // 3. 不是组合，直接进入账号确认流程
             currentSearchQueue.unshift(firstQuery); 
             processNextQueueItem();
         }
     } catch(e) {
-        console.error(e);
-        if(loadingEl) loadingEl.style.display = 'none';
-        document.getElementById('group-select-modal').style.display = 'none';
+        console.error("组合检测失败，直接按单人处理", e);
         currentSearchQueue.unshift(firstQuery);
         processNextQueueItem();
     }
@@ -376,24 +399,41 @@ async function confirmAddMonitor() {
         return;
     }
     
+<<<<<<< HEAD
     // 必须先隐藏弹窗，但【绝对不能】调用 closeModal()，否则会清空队列
     document.getElementById('user-select-modal').style.display = 'none';
 
     if (modalMode === 'weibo') {
         // 把当前确认的名字加入总列表
         finalWeiboSearchNames.push(...currentConfirmList);
+=======
+    if (modalMode === 'weibo') {
+        // 初始化收集数组
+        if (!window.finalWeiboSearchNames) window.finalWeiboSearchNames = [];
+        // 把当前确认的名字加入总列表
+        window.finalWeiboSearchNames.push(...currentConfirmList);
+        
+        closeModal(); 
+>>>>>>> b80747982893741af8a1ffcb7aa3d273f2954af2
         
         // 如果队列里还有名字，继续弹窗确认
         if (currentSearchQueue.length > 0) {
             processWeiboQueueItem();
         } else {
             // 所有名字都确认完了，真正开始抓取
+<<<<<<< HEAD
             executeWeiboSearch(finalWeiboSearchNames.join(","));
             finalWeiboSearchNames = []; // 清空
             modalMode = 'monitor'; // 重置状态
         }
     } else {
         // 监控模式：写入数据库
+=======
+            executeWeiboSearch(window.finalWeiboSearchNames.join(","));
+            window.finalWeiboSearchNames = []; // 清空
+        }
+    } else {
+>>>>>>> b80747982893741af8a1ffcb7aa3d273f2954af2
         for (let name of currentConfirmList) {
             await fetch(`/api/monitor/add?name=${encodeURIComponent(name)}`);
         }
