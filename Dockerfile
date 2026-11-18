@@ -29,3 +29,8 @@ EXPOSE 8000
 
 # 6. 启动命令：使用动态分配的 $PORT，如果没有则默认 8000
 CMD uvicorn server:app --host 0.0.0.0 --port ${PORT:-8000}
+
+# ... 前面代码保持不变 ...
+# 核心修复：安装 Chromium 及其运行所需的全部底层系统依赖
+RUN playwright install --with-deps chromium
+# ... 后面保持不变 ...
