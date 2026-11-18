@@ -237,6 +237,23 @@ async def api_alerts():
 async def api_check_group(query: str):
     return analyze_group_query(query)
 
+@app.get("/api/test-browser")
+def test_browser():
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            # 尝试启动 chromium
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto("https://weibo.com", timeout=15000)
+            title = page.title()
+            browser.close()
+            return {"ok": True, "title": title, "message": "浏览器启动成功，微博访问正常！"}
+    except Exception as e:
+        # 这里会打印出真实的报错，比如缺库、找不到浏览器等
+        print(f"❌ 浏览器测试失败: {e}") 
+        return {"ok": False, "error": str(e)}
+
 app.mount("/", StaticFiles(directory="web", html=True), name="web")
 
 if __name__ == "__main__":
