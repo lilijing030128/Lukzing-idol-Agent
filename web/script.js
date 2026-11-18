@@ -202,37 +202,30 @@ async function addMonitor() {
     let firstQuery = namesToAdd[0]; 
     currentSearchQueue = namesToAdd.slice(1);
 
-    currentGroupData = null; 
-    document.getElementById('group-official-name').innerText = '...';
-    document.getElementById('group-member-count').innerText = '...';
-    document.getElementById('group-modal-query').innerText = firstQuery;
-    
-    const loadingEl = document.getElementById('group-loading');
-    if(loadingEl) loadingEl.style.display = 'inline'; 
-    
-    document.getElementById('group-select-modal').style.display = 'flex';
-    
+    // 1. 先静默请求后端，判断是不是组合，不显示弹窗
     try {
         const res = await fetch(`/api/check_group?query=${encodeURIComponent(firstQuery)}`);
         const data = await res.json();
         
-        if(loadingEl) loadingEl.style.display = 'none'; 
-
         if (data.is_group && data.members && data.members.length > 0) {
+            // 2. 只有确认是组合时，才显示组合弹窗
             currentGroupData = data;
             document.getElementById('group-official-name').innerText = data.group_name;
             document.getElementById('group-member-count').innerText = data.members.length;
             document.getElementById('group-opt-official').checked = true;
             document.getElementById('group-opt-members').checked = true;
+            
+            const loadingEl = document.getElementById('group-loading');
+            if(loadingEl) loadingEl.style.display = 'none'; // 隐藏加载提示
+            
+            document.getElementById('group-select-modal').style.display = 'flex';
         } else {
-            document.getElementById('group-select-modal').style.display = 'none';
+            // 3. 不是组合，直接进入账号确认流程
             currentSearchQueue.unshift(firstQuery); 
             processNextQueueItem();
         }
     } catch(e) {
-        console.error(e);
-        if(loadingEl) loadingEl.style.display = 'none';
-        document.getElementById('group-select-modal').style.display = 'none';
+        console.error("组合检测失败，直接按单人处理", e);
         currentSearchQueue.unshift(firstQuery);
         processNextQueueItem();
     }
