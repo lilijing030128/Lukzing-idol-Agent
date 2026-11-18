@@ -29,35 +29,6 @@ def expand_names(nicknames_str):
             expanded_names.append(name)
     return list(set(expanded_names))
 
-def analyze_group_query(query):
-    # 优先查本地字典，0.01秒瞬间返回
-    if query in GROUPS:
-        return {
-            "is_group": True,
-            "group_name": query,
-            "members": GROUPS[query]
-        }
-
-    # 如果本地没命中，再去调大模型
-    prompt = f"""
-    你是一个智能数据解析助手。请判断用户输入的词 "{query}" 是否为一个偶像团体、乐队或多人组合。
-    如果是，请提取官方名和全部成员名。
-    【强制要求】如果不是组合或你不确定，必须返回 is_group: false，绝对禁止胡编乱造。
-    必须严格输出 JSON 格式（不要 Markdown 符号）：
-    {{"is_group": true, "group_name": "官方名", "members": ["成员1", "成员2"]}}
-    """
-    try:
-        res = client.chat.completions.create(
-            model="glm-4-flash",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.1
-        )
-        result_text = res.choices[0].message.content.strip().replace("```json", "").replace("```", "").strip()
-        return json.loads(result_text)
-    except Exception as e:
-        print(f"组合解析失败: {e}")
-        return {"is_group": False, "group_name": "", "members": []}
-
 load_dotenv()
 client = OpenAI(
     api_key=os.getenv("ZHIPU_API_KEY"),
@@ -308,6 +279,8 @@ def analyze_group_query(query):
     """
     利用大模型判断用户输入是否为组合，并拆解成员。
     """
+    query = query.strip()  # 去首尾空格
+    
     # 1. 先查本地字典，如果命中了直接返回，速度最快
     if query in GROUPS:
         return {
@@ -315,6 +288,15 @@ def analyze_group_query(query):
             "group_name": query,
             "members": GROUPS[query]
         }
+    
+    # 模糊匹配：忽略大小写
+    for key in GROUPS:
+        if key.lower() == query.lower():
+            return {
+                "is_group": True,
+                "group_name": key,
+                "members": GROUPS[key]
+            }
 
     # 2. 本地没命中，调用大模型进行推理（Zero-shot 拆解）
     prompt = f"""
