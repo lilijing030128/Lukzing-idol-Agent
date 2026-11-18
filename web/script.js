@@ -63,34 +63,52 @@ async function searchWeibo() {
     const inputVal = document.getElementById('weibo-names').value.trim();
     if(!inputVal) return;
     
-    // 拿到用户输入的第一个词（比如“蒋敦豪”），先拿去搜候选账号
     let names = inputVal.split(/[,，\s]+/).map(n => n.trim()).filter(n => n);
     if (names.length === 0) return;
-    let firstQuery = names[0];
 
-    // 标记当前为“抓取微博”模式
+    // 将所有的名字放入队列，并标记为“抓取微博”模式
+    currentSearchQueue = [...names]; 
     modalMode = 'weibo'; 
+    
+    // 处理队列中的第一个名字
+    processWeiboQueueItem();
+}
+
+// 新增：专门处理“抓取微博”模式下的队列
+async function processWeiboQueueItem() {
+    if (currentSearchQueue.length === 0) {
+        return; // 队列为空，结束
+    }
+    
+    let nextName = currentSearchQueue.shift();
+    
     document.getElementById('user-select-modal').style.display = 'flex';
-    document.getElementById('modal-search-term').innerText = firstQuery;
-    document.getElementById('candidate-list').innerHTML = '<p style="text-align:center;">⏳ 正在获取候选账号，请稍候...</p>';
+    document.getElementById('modal-search-term').innerText = nextName;
+    document.getElementById('candidate-list').innerHTML = '<p style="text-align:center;">⏳ 正在获取候选账号...</p>';
     
     currentConfirmList = []; 
-
+    
     try {
-        const res = await fetch(`/api/search_users?query=${encodeURIComponent(firstQuery)}`);
+        const res = await fetch(`/api/search_users?query=${encodeURIComponent(nextName)}`);
         const data = await res.json();
         
         if (!data.users || data.users.length === 0) {
-            alert(`未找到“${firstQuery}”的账号，将直接按原名抓取。`);
-            closeModal(); // 关闭弹窗
-            executeWeiboSearch(inputVal); // 直接按原名抓取
+            // 没搜到，直接按原名加入最终抓取列表，跳过弹窗
+            console.warn(`未找到 "${nextName}" 的候选账号，将使用原名抓取`);
+            // 这里我们需要一个临时变量来收集所有最终要抓取的名字
+            if (!window.finalWeiboSearchNames) window.finalWeiboSearchNames = [];
+            window.finalWeiboSearchNames.push(nextName);
+            
+            // 继续处理下一个
+            document.getElementById('user-select-modal').style.display = 'none';
+            processWeiboQueueItem();
             return;
         }
 
         let html = '';
         data.users.forEach((u, index) => {
             let defaultAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.screen_name}`;
-            let isChecked = (index === 0) ? 'checked' : ''; // 默认勾选第一个
+            let isChecked = (index === 0) ? 'checked' : '';
             
             html += `
             <label style="display:flex; align-items:center; gap:10px; padding:10px; border:1px solid #e5e7eb; border-radius:8px; cursor:pointer;">
@@ -104,11 +122,12 @@ async function searchWeibo() {
         });
         
         document.getElementById('candidate-list').innerHTML = html;
-        currentConfirmList = [data.users[0].screen_name]; // 默认选中第一个
+        currentConfirmList = [data.users[0].screen_name]; 
         
     } catch (e) {
         console.error(e);
-        closeModal();
+        document.getElementById('user-select-modal').style.display = 'none';
+        processWeiboQueueItem();
     }
 }
 
@@ -354,14 +373,23 @@ async function confirmAddMonitor() {
         return;
     }
     
-    let selectedNamesStr = currentConfirmList.join(",");
-
     if (modalMode === 'weibo') {
-        // 🌟 如果是微博追踪模式：关闭弹窗，带着确认的账号去抓取！
-        closeModal();
-        executeWeiboSearch(selectedNamesStr);
+        // 初始化收集数组
+        if (!window.finalWeiboSearchNames) window.finalWeiboSearchNames = [];
+        // 把当前确认的名字加入总列表
+        window.finalWeiboSearchNames.push(...currentConfirmList);
+        
+        closeModal(); 
+        
+        // 如果队列里还有名字，继续弹窗确认
+        if (currentSearchQueue.length > 0) {
+            processWeiboQueueItem();
+        } else {
+            // 所有名字都确认完了，真正开始抓取
+            executeWeiboSearch(window.finalWeiboSearchNames.join(","));
+            window.finalWeiboSearchNames = []; // 清空
+        }
     } else {
-        // 如果是粉丝监控模式：按原来的逻辑，写入数据库
         for (let name of currentConfirmList) {
             await fetch(`/api/monitor/add?name=${encodeURIComponent(name)}`);
         }
