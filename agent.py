@@ -100,7 +100,7 @@ def fetch_current_fans(nicknames_str):
         return None
 
     # 3. 使用线程池并发抓取（解决速度慢的问题）
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
         results = executor.map(fetch_single, nicknames)
         for res in results:
             if res:
