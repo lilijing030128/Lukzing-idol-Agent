@@ -8,3 +8,4 @@ crawl4weibo
 openai
 python-dotenv
 requests
+playwright
