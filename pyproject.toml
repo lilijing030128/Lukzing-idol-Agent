@@ -1,0 +1,14 @@
+[project]
+name = "my-vercel-app"
+version = "0.1.0"
+description = "A Python app deployed on Vercel"
+requires-python = ">=3.12"  # 推荐明确指定版本，Vercel 默认支持 3.12
+dependencies = [
+    "apscheduler",
+    "snownlp",
+    "crawl4weibo",
+    "openai",
+    "python-dotenv",
+    "requests",
+    "playwright",
+]
