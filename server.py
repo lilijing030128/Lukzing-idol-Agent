@@ -254,7 +254,7 @@ def test_browser():
         print(f"❌ 浏览器测试失败: {e}") 
         return {"ok": False, "error": str(e)}
 
-app.mount("/", StaticFiles(directory="web", html=True), name="web")
+app.mount("/", StaticFiles(directory="public", html=True), name="public")
 
 if __name__ == "__main__":
     uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=True)

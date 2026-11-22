@@ -12,3 +12,6 @@ dependencies = [
     "requests",
     "playwright",
 ]
+
+[tool.vercel]
+entrypoint = "你的模块名:app"
