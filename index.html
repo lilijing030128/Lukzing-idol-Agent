@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lukzing 智能聚合平台</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts-wordcloud@2.1.0/dist/echarts-wordcloud.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo">✦ Lukzing</div>
+        <div class="nav-links">
+            <a onclick="switchTab('home')" id="nav-home" class="active">首页</a>
+            <a onclick="switchTab('weibo')" id="nav-weibo">微博追踪</a>
+            <a onclick="switchTab('trend')" id="nav-trend">📈 粉丝监控</a>
+            <a onclick="switchTab('draft')" id="nav-draft">✍️ AI 发帖 (Multi-Agent)</a>
+            <a onclick="switchTab('ai')" id="nav-ai">AI 智能体</a>
+        </div>
+    </nav>
+
+    <main class="container">
+        <!-- 🌟 预警横幅 -->
+        <div id="alert-banner" style="display:none; background-color:#fee2e2; border-left:6px solid #ef4444; padding:15px; border-radius:8px; margin-bottom:20px; color:#991b1b; font-weight:bold; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+            <!-- JS 注入内容 -->
+        </div>
+
+        <section id="home" class="tab-content active">
+            <div class="hero-section">
+                <h1>让信息如青草般生长</h1>
+                <p>聚合海量数据，用 AI 为你梳理繁杂的社交媒体动态。</p>
+            </div>
+            <div class="wordcloud-container">
+                <h3>🌿 最近搜索的足迹</h3>
+                <div id="word-cloud" style="width: 100%; height: 400px;"></div>
+            </div>
+        </section>
+
+        <section id="weibo" class="tab-content">
+            <h2>📱 微博批量追踪</h2>
+            <div class="input-group">
+                <input type="text" id="weibo-names" placeholder="输入昵称，逗号分隔 (例: 蒋敦豪, 鹭卓)">
+                <button onclick="searchWeibo()">开始抓取</button>
+            </div>
+            <div id="weibo-results" class="results-area"></div>
+        </section>
+
+        <section id="trend" class="tab-content">
+            <div class="hero-section" style="padding-bottom: 20px;">
+                <h2>📈 粉丝增长监控 & 舆情雷达</h2>
+                <p>系统会在每天 08:00 自动记录趋势并分析情绪。</p>
+            </div>
+            
+            <div class="input-group">
+                <input type="text" id="add-monitor-name" placeholder="输入要新增监控的微博昵称，可一次输入多个，用逗号隔开 (例: 蒋敦豪, 鹭卓)" title="多个名字请用逗号或空格隔开">
+                <button onclick="addMonitor()" style="background:#3b82f6;">➕ 添加监控</button>
+                <button onclick="window.location.href='/api/export/excel'">📥 导出 Excel</button>
+            </div>
+
+            <div class="card" style="margin-bottom: 20px;">
+                <h3 style="margin-bottom: 10px;">我的监控列表 (点击右侧取关)</h3>
+                <div id="monitor-list-container" style="display: flex; flex-wrap: wrap; gap: 10px;"></div>
+            </div>
+
+            <div class="wordcloud-container" style="height: 400px; margin-bottom: 20px; position: relative;">
+                <h3>🌿 实时粉丝情绪雷达 (自动触发预警)</h3>
+                <div id="sentiment-chart" style="width: 100%; height: 300px;"></div>
+                <div id="sentiment-loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #10b981; display: none;">⏳ 正在智能分析情绪...</div>
+            </div>
+
+            <div id="current-fans-container" style="display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap;"></div>
+            
+            <div class="wordcloud-container" style="height: 500px;">
+                <h3>🌿 历史粉丝增长趋势</h3>
+                <div id="trend-chart" style="width: 100%; height: 90%; margin-top: 10px;"></div>
+            </div>
+        </section>
+
+        <section id="draft" class="tab-content">
+            <h2>✍️ AI 发帖助手 (Multi-Agent 协同)</h2>
+            <p style="color:#047857; margin-bottom: 15px;">主笔 Agent 生成初稿，主编 Agent 严格审查修改。保证饭圈风格。</p>
+            <div class="input-group">
+                <input type="text" id="draft-names" value="蒋敦豪, 鹭卓, 李耕耘" placeholder="输入昵称">
+                <button onclick="generateDraft()">生成文案</button>
+            </div>
+            <div id="draft-result" class="card" style="white-space: pre-wrap; line-height: 1.8; font-size: 1.05rem; display: none;"></div>
+        </section>
+
+        <section id="ai" class="tab-content">
+            <h2>🤖 AI 智能体智搜</h2>
+            <div class="chat-box" id="chat-box">
+                <div class="message system">你好！输入问题，我会去微博搜索真实数据并为你整理答案。</div>
+            </div>
+            <div class="input-group chat-input-group">
+                <input type="text" id="ai-query" placeholder="例如：蒋敦豪最近在忙什么？">
+                <button onclick="askAI()">发送</button>
+            </div>
+        </section>
+    </main>
+
+    <!-- 组合智能拆解弹窗 -->
+    <div id="group-select-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center;">
+        <div style="background:#fff; padding:30px; border-radius:16px; width:500px; max-width:90%; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+            <h3 style="margin-bottom:15px; color:#065f46;">🤖 智能体检测到组合</h3>
+            <p style="font-size:0.9rem; color:#666; margin-bottom:20px;">
+                您搜索的 <strong id="group-modal-query" style="color:#10b981;"></strong> 似乎是一个组合。请选择您要监控的范围：
+                <span id="group-loading" style="color:#10b981; font-size:0.8rem; display:none;">(正在调用大模型分析...)</span>
+            </p>
+            
+            <div style="margin-bottom: 20px;">
+                <label style="display:flex; align-items:center; gap:10px; margin-bottom:10px; cursor:pointer;">
+                    <input type="checkbox" id="group-opt-official" value="true" checked>
+                    <span>仅监控组合官方账号 <strong id="group-official-name"></strong></span>
+                </label>
+                <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                    <input type="checkbox" id="group-opt-members" value="true" checked>
+                    <span>监控全部成员 (<span id="group-member-count"></span>人)</span>
+                </label>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:10px;">
+                <button onclick="closeGroupModal()" style="background:#e5e7eb; color:#374151; box-shadow:none;">取消</button>
+                <button onclick="confirmGroupSelection()" style="background:#3b82f6;">下一步：确认具体账号</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 账号选择弹窗 (已修复结构) -->
+    <div id="user-select-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center;">
+        <div style="background:#fff; padding:30px; border-radius:16px; width:500px; max-width:90%; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+            <h3 style="margin-bottom:15px; color:#065f46;">请确认你要监控的账号</h3>
+            <p style="font-size:0.9rem; color:#666; margin-bottom:10px;">搜索 "<span id="modal-search-term" style="font-weight:bold; color:#10b981;"></span>" 出现了多个结果，请勾选：</p>
+            
+            <!-- 全选按钮独立放在外面，绝对不会被覆盖 -->
+            <div style="margin-bottom: 10px; display:flex; justify-content: flex-start;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:bold; color:#065f46; font-size: 0.95rem;">
+                    <input type="checkbox" id="select-all-users" onchange="toggleSelectAll(this)">
+                    全选 / 取消全选
+                </label>
+            </div>
+
+            <!-- 这里是唯一且干净的列表容器 -->
+            <div id="candidate-list" style="max-height: 300px; overflow-y: auto; margin-bottom: 20px; display:flex; flex-direction:column; gap:10px;">
+                <!-- JS 注入候选列表 -->
+            </div>
+            
+            <div style="display:flex; justify-content:flex-end; gap:10px;">
+                <button onclick="closeModal()" style="background:#e5e7eb; color:#374151; box-shadow:none;">取消</button>
+                <button onclick="confirmAddMonitor()" style="background:#3b82f6;">确认添加</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
